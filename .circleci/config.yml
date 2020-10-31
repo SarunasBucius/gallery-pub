@@ -1,0 +1,58 @@
+# Use the latest 2.1 version of CircleCI pipeline process engine. See: https://circleci.com/docs/2.0/configuration-reference
+version: 2.1
+
+jobs:
+    build:
+        working_directory: ~/personal-page
+        docker: 
+            - image: circleci/node:12.18.0-browsers
+        steps:
+            - checkout
+            - restore_cache: # special step to restore the dependency cache
+                # Read about caching dependencies: https://circleci.com/docs/2.0/caching/
+                key: dependency-cache-{{ checksum "yarn.lock" }}
+            - run:
+                name: install-modules
+                command: yarn install
+            - save_cache: # special step to save the dependency cache
+                key: dependency-cache-{{ checksum "yarn.lock" }}
+                paths:
+                  - ./node_modules
+            - run:
+                name: unit_test
+                command: yarn test:unit
+            - run:
+                name: e2e_test
+                command: yarn test:e2e
+            - run:
+                name: build
+                command: yarn build
+            - persist_to_workspace:
+                root: ~/personal-page
+                paths:
+                    - .
+    deploy:
+        docker: 
+            - image: circleci/node:12.18.0-browsers
+        working_directory: ~/personal-page
+        steps:
+            - attach_workspace:
+                at: ~/personal-page
+            - run:
+                name: install_firebase
+                command: sudo npm install -g firebase-tools
+            - run:
+                name: firebase_deploy
+                command: firebase deploy --only hosting --token "$FIREBASE_TOKEN"
+   
+workflows:
+  version: 2.1
+  build-and-deploy:
+    jobs:
+        - build
+        - deploy:
+            requires:
+              - build
+            filters:
+              branches: 
+                only: master
